@@ -21,17 +21,51 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      - name: Build iOS app (Debug - no signing)
+      - name: Build for iOS device (unsigned)
         run: |
           xcodebuild build \
             -project minifly.xcodeproj \
             -scheme minifly \
-            -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            -arch arm64 \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            | tee build.log | tail -20
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE="" \
+            | tee build.log | tail -30
+
+      - name: Create unsigned .ipa
+        run: |
+          APP_PATH="build/Build/Products/Release-iphoneos/minifly.app"
+
+          if [ ! -d "$APP_PATH" ]; then
+            echo "❌ minifly.app not found!"
+            find build -name "*.app" -type d
+            exit 1
+          fi
+
+          echo "✅ Found app at: $APP_PATH"
+
+          # Create Payload directory and package as .ipa
+          mkdir -p Payload
+          cp -r "$APP_PATH" Payload/
+          zip -r minifly-unsigned.ipa Payload/
+          rm -rf Payload
+
+          echo "✅ Created minifly-unsigned.ipa"
+          ls -lh minifly-unsigned.ipa
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: minifly-unsigned-ipa
+          path: minifly-unsigned.ipa
+          retention-days: 30
 
       - name: Upload build log on failure
         if: failure()
@@ -41,4 +75,7 @@ jobs:
           path: build.log
 
       - name: Build succeeded
-        run: echo "✅ MiniFly iOS build succeeded!"
+        run: |
+          echo "✅ MiniFly iOS build succeeded!"
+          echo "📦 Download the .ipa from the Artifacts section above"
+          echo "📱 Use AltStore to install on your iPhone"
